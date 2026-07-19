@@ -24,8 +24,8 @@ requires-python = ">=3.11"
 
 [project.optional-dependencies]
 dev = [
-    "awscli",
-    "awscli-local",
+    "awscli >= 1.45.51",
+    "awscli-local >= 0.22.2",
     "pytest-shell",
     "types-requests",
     "types-python-dateutil",
