@@ -110,7 +110,7 @@ def run(**kwargs):  # type: ignore[no-untyped-def]
 
                 # If the result is a list, then return the first element, with a warning
                 # that there's more than one
-                if isinstance(result, list) and isinstance(result[0], (str, int)):
+                if isinstance(result, list) and isinstance(result[0], str | int):
                     logger.warning(
                         f"JSONPath returned a list of length {len(result)}. Returning "
                         + "only the first element"
@@ -118,7 +118,7 @@ def run(**kwargs):  # type: ignore[no-untyped-def]
                     result = result[0]
 
                 # If the result is not a string or an int, then raise an exception
-                if not isinstance(result, (str, int)):
+                if not isinstance(result, str | int):
                     if fail_on_exception:
                         raise LookupPluginError(
                             f"JSONPath returned a value of type {type(result)}. Expected a string or int"
