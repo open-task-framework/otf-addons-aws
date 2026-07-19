@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "otf-addons-aws"
-version = "v26.18.0"
+version = "v26.28.0"
 authors = [{ name = "Adam McDonagh", email = "adam@elitemonkey.net" }]
 license = { text = "GPLv3" }
 classifiers = [
@@ -14,7 +14,7 @@ classifiers = [
 ]
 keywords = ["automation", "task", "framework", "aws", "s3", "ssm", "otf"]
 dependencies = [
-    "boto3 >= 1.26",
+    "boto3 >= 1.43",
     "jsonpath-ng >= 1.7.0",
     "opentaskpy >= v26.18.1",
 ]
@@ -24,8 +24,8 @@ requires-python = ">=3.11"
 
 [project.optional-dependencies]
 dev = [
-    "awscli",
-    "awscli-local",
+    "awscli >= 1.45.51",
+    "awscli-local >= 0.22.2",
     "pytest-shell",
     "types-requests",
     "types-python-dateutil",
@@ -57,7 +57,7 @@ dev = [
 profile = 'black'
 
 [tool.bumpver]
-current_version = "v26.18.0"
+current_version = "v26.28.0"
 version_pattern = "vYY.WW.PATCH[-TAG]"
 commit_message = "bump version {old_version} -> {new_version}"
 commit = true
@@ -373,8 +373,6 @@ ignore = [
     "D407", # Section name underlining
     "E501", # line too long
     "E731", # do not assign a lambda expression, use a def
-    # Ignored due to performance: https://github.com/charliermarsh/ruff/issues/2923
-    "UP038", # Use `X | Y` in `isinstance` call instead of `(X, Y)`
 ]
 
 

@@ -53,6 +53,7 @@ def credentials(floci, cleanup_credentials):
     os.environ["AWS_ACCESS_KEY_ID"] = "test"
     os.environ["AWS_SECRET_ACCESS_KEY"] = "test"
     os.environ["AWS_REGION"] = "eu-west-1"
+    os.environ["AWS_DEFAULT_REGION"] = "eu-west-1"
     os.environ["AWS_ENDPOINT_URL"] = floci
 
 
@@ -64,6 +65,8 @@ def cleanup_credentials():
         del os.environ["AWS_SECRET_ACCESS_KEY"]
     if os.environ.get("AWS_REGION"):
         del os.environ["AWS_REGION"]
+    if os.environ.get("AWS_DEFAULT_REGION"):
+        del os.environ["AWS_DEFAULT_REGION"]
     if os.environ.get("AWS_ENDPOINT_URL"):
         del os.environ["AWS_ENDPOINT_URL"]
     if os.environ.get("ASSUME_ROLE_ARN"):

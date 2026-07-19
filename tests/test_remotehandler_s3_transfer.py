@@ -12,10 +12,12 @@ from copy import deepcopy
 import botocore
 import freezegun
 import pytest
+from botocore.config import Config
 from opentaskpy.taskhandlers import transfer
 from pytest_shell import fs
 
 from opentaskpy import exceptions
+from opentaskpy.addons.aws.remotehandlers.creds import get_aws_client
 from opentaskpy.addons.aws.remotehandlers.s3 import S3Transfer
 from tests.fixtures.localstack import *
 
@@ -311,7 +313,7 @@ s3_to_s3_assume_role_task_definition = {
         },
         "protocol": {
             "name": "opentaskpy.addons.aws.remotehandlers.s3.S3Transfer",
-            "assume_role_arn": "arn:aws:iam::012345678900:role/dummy-role",
+            "assume_role_arn": "arn:aws:iam::000000000000:role/dummy-role",
         },
     },
     "destination": [
@@ -460,7 +462,7 @@ def setup_bucket(credentials, s3_client):
         subprocess.run(
             ["awslocal", "s3", "rb", f"s3://{bucket}", "--force"], check=False
         )
-        subprocess.run(["awslocal", "s3", "mb", f"s3://{bucket}"], check=False)
+        subprocess.run(["awslocal", "s3", "mb", f"s3://{bucket}"], check=True)
 
 
 def test_remote_handler():
@@ -475,6 +477,199 @@ def test_remote_handler():
 
     # dest_remote_handler should be None
     assert transfer_obj.dest_remote_handlers is None
+
+
+def test_s3_transfer_passes_botocore_config(monkeypatch):
+    captured = {}
+
+    class DummyClient:
+        def close(self):
+            return None
+
+    def fake_get_aws_client(
+        client_type,
+        credentials,
+        token_expiry_seconds=900,
+        assume_role_arn=None,
+        assume_role_external_id=None,
+        config=None,
+    ):
+        captured["client_type"] = client_type
+        captured["credentials"] = credentials
+        captured["token_expiry_seconds"] = token_expiry_seconds
+        captured["assume_role_arn"] = assume_role_arn
+        captured["assume_role_external_id"] = assume_role_external_id
+        captured["config"] = config
+        return {"client": DummyClient(), "temporary_creds": None}
+
+    monkeypatch.setattr(
+        "opentaskpy.addons.aws.remotehandlers.s3.get_aws_client", fake_get_aws_client
+    )
+
+    handler = S3Transfer(
+        {
+            "task_id": "s3-config-test",
+            "bucket": BUCKET_NAME,
+            "directory": "src",
+            "fileRegex": ".*\\.txt",
+            "protocol": {
+                "name": "opentaskpy.addons.aws.remotehandlers.s3.S3Transfer",
+                "botocoreReadTimeout": 120,
+                "botocoreConnectTimeout": 30,
+                "max_attempts": 2,
+            },
+        }
+    )
+
+    assert isinstance(captured["config"], Config)
+    assert captured["client_type"] == "s3"
+    assert captured["config"].read_timeout == 120
+    assert captured["config"].connect_timeout == 30
+    assert captured["config"].retries["max_attempts"] == 2
+    handler.tidy()
+
+
+def test_s3_transfer_uses_default_botocore_config(monkeypatch):
+    captured = {}
+
+    class DummyClient:
+        def close(self):
+            return None
+
+    def fake_get_aws_client(
+        client_type,
+        credentials,
+        token_expiry_seconds=900,
+        assume_role_arn=None,
+        assume_role_external_id=None,
+        config=None,
+    ):
+        captured["config"] = config
+        return {"client": DummyClient(), "temporary_creds": None}
+
+    monkeypatch.setattr(
+        "opentaskpy.addons.aws.remotehandlers.s3.get_aws_client", fake_get_aws_client
+    )
+
+    handler = S3Transfer(
+        {
+            "task_id": "s3-default-config-test",
+            "bucket": BUCKET_NAME,
+            "directory": "src",
+            "fileRegex": ".*\\.txt",
+            "protocol": {
+                "name": "opentaskpy.addons.aws.remotehandlers.s3.S3Transfer",
+            },
+        }
+    )
+
+    assert isinstance(captured["config"], Config)
+    assert captured["config"].read_timeout == 60
+    assert captured["config"].connect_timeout == 10
+    assert captured["config"].retries["max_attempts"] == 0
+    handler.tidy()
+
+
+def test_s3_transfer_tidy_is_idempotent(monkeypatch):
+    class DummyClient:
+        def __init__(self):
+            self.close_calls = 0
+
+        def close(self):
+            self.close_calls += 1
+
+    def fake_get_aws_client(
+        client_type,
+        credentials,
+        token_expiry_seconds=900,
+        assume_role_arn=None,
+        assume_role_external_id=None,
+        config=None,
+    ):
+        return {"client": DummyClient(), "temporary_creds": None}
+
+    monkeypatch.setattr(
+        "opentaskpy.addons.aws.remotehandlers.s3.get_aws_client", fake_get_aws_client
+    )
+
+    handler = S3Transfer(
+        {
+            "task_id": "s3-tidy-test",
+            "bucket": BUCKET_NAME,
+            "directory": "src",
+            "fileRegex": ".*\\.txt",
+            "protocol": {
+                "name": "opentaskpy.addons.aws.remotehandlers.s3.S3Transfer",
+            },
+        }
+    )
+
+    client = handler.s3_client
+    handler.tidy()
+    handler.tidy()
+
+    assert client.close_calls == 1
+    assert handler.s3_client is None
+
+
+def test_get_aws_client_passes_region_to_sts(monkeypatch):
+    captured = {}
+
+    class DummySTSClient:
+        def assume_role(self, **kwargs):
+            captured["assume_role_kwargs"] = kwargs
+            return {
+                "Credentials": {
+                    "AccessKeyId": "assumed-key",
+                    "SecretAccessKey": "assumed-secret",
+                    "SessionToken": "assumed-token",
+                }
+            }
+
+    class DummySession:
+        def __init__(self, **kwargs):
+            captured["session_kwargs"] = kwargs
+
+        def client(self, client_type, **kwargs):
+            captured["session_client_type"] = client_type
+            captured["session_client_kwargs"] = kwargs
+            return object()
+
+    def fake_boto3_client(service_name, **kwargs):
+        captured["sts_service_name"] = service_name
+        captured["sts_client_kwargs"] = kwargs
+        return DummySTSClient()
+
+    monkeypatch.setenv("AWS_ENDPOINT_URL", "http://floci.test")
+    monkeypatch.setattr(
+        "opentaskpy.addons.aws.remotehandlers.creds.boto3.client",
+        fake_boto3_client,
+    )
+    monkeypatch.setattr(
+        "opentaskpy.addons.aws.remotehandlers.creds.boto3.session.Session",
+        DummySession,
+    )
+
+    result = get_aws_client(
+        "s3",
+        {
+            "AccessKeyId": "test-key",
+            "SecretAccessKey": "test-secret",
+            "region_name": "eu-west-1",
+        },
+        assume_role_arn="arn:aws:iam::012345678900:role/dummy-role",
+    )
+
+    assert captured["sts_service_name"] == "sts"
+    assert captured["sts_client_kwargs"]["endpoint_url"] == "http://floci.test"
+    assert captured["sts_client_kwargs"]["region_name"] == "eu-west-1"
+    assert captured["assume_role_kwargs"]["RoleArn"] == (
+        "arn:aws:iam::012345678900:role/dummy-role"
+    )
+    assert captured["session_kwargs"]["aws_access_key_id"] == "assumed-key"
+    assert captured["session_client_type"] == "s3"
+    assert captured["session_client_kwargs"]["endpoint_url"] == "http://floci.test"
+    assert result["temporary_creds"]["AccessKeyId"] == "assumed-key"
 
 
 def test_s3_file_watch(s3_client, setup_bucket, tmp_path):

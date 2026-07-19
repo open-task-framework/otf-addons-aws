@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 
 import boto3
 import opentaskpy.otflogging
+from botocore.config import Config
 from botocore.exceptions import ClientError
 from dateutil.tz import tzlocal
 from opentaskpy.remotehandlers.remotehandler import (
@@ -17,6 +18,32 @@ from opentaskpy.remotehandlers.remotehandler import (
 from .creds import get_aws_client, set_aws_creds
 
 MAX_OBJECTS_PER_QUERY = 100
+DEFAULT_S3_BOTOCORE_READ_TIMEOUT = 60
+DEFAULT_S3_BOTOCORE_CONNECT_TIMEOUT = 10
+DEFAULT_S3_BOTOCORE_MAX_ATTEMPTS = 0
+
+
+def _build_botocore_config(protocol: dict) -> Config:
+    """Build a botocore client config from the task protocol settings.
+
+    Defaults are applied so S3 transfers do not inherit botocore retry behaviour that
+    can keep a batch blocked longer than expected after a timeout request.
+    """
+    config_options = {
+        "read_timeout": protocol.get(
+            "botocoreReadTimeout", DEFAULT_S3_BOTOCORE_READ_TIMEOUT
+        ),
+        "connect_timeout": protocol.get(
+            "botocoreConnectTimeout", DEFAULT_S3_BOTOCORE_CONNECT_TIMEOUT
+        ),
+        "retries": {
+            "max_attempts": protocol.get(
+                "max_attempts", DEFAULT_S3_BOTOCORE_MAX_ATTEMPTS
+            )
+        },
+    }
+
+    return Config(**config_options)
 
 
 class S3Transfer(RemoteTransferHandler):
@@ -74,12 +101,15 @@ class S3Transfer(RemoteTransferHandler):
             if self.temporary_creds:
                 self.logger.info("Renewing temporary credentials")
 
+            client_config = _build_botocore_config(self.spec["protocol"])
+
             client_result = get_aws_client(
                 "s3",
                 self.credentials,
                 token_expiry_seconds=self.token_expiry_seconds,
                 assume_role_arn=self.assume_role_arn,
                 assume_role_external_id=self.assume_role_external_id,
+                config=client_config,
             )
             self.temporary_creds = (
                 client_result["temporary_creds"]
@@ -484,7 +514,8 @@ class S3Transfer(RemoteTransferHandler):
 
     def tidy(self) -> None:
         """Tidy up the S3 client."""
-        self.s3_client.close()
+        if self.s3_client and hasattr(self.s3_client, "close"):
+            self.s3_client.close()
         self.s3_client = None  # allow botocore objects to be garbage collected
 
 
@@ -593,5 +624,6 @@ class S3Execution(RemoteExecutionHandler):
 
     def tidy(self) -> None:
         """Tidy up the S3 client."""
-        self.s3_client.close()
+        if self.s3_client and hasattr(self.s3_client, "close"):
+            self.s3_client.close()
         self.s3_client = None  # allow botocore objects to be garbage collected
