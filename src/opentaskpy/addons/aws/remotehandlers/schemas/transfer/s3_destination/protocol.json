@@ -27,6 +27,15 @@
     },
     "region_name": {
       "type": "string"
+    },
+    "botocoreReadTimeout": {
+      "type": "integer"
+    },
+    "botocoreConnectTimeout": {
+      "type": "integer"
+    },
+    "max_attempts": {
+      "type": "integer"
     }
   },
   "required": ["name"],

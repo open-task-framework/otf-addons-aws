@@ -1,5 +1,10 @@
 # Changelog
 
+# v26.28.0
+
+- Add support for specifying botore timeouts and retries for s3 transfers/executions
+- Fix issue in tidy throwing an exception when the s3 client was already closed
+
 # v26.18.0
 
 - Fix a bug where the S3 client was not being properly closed and garbage collected, which could lead to resource leaks and issues with too many open connections. This was caused by the `tidy` method not setting the `s3_client` attribute to `None` after closing it, which meant that the botocore objects were not being garbage collected.

@@ -125,6 +125,11 @@ def test_s3_source_protocol(
     json_data["source"]["protocol"]["token_expiry_seconds"] = 10000
     assert validate_transfer_json(json_data)
 
+    json_data["source"]["protocol"]["botocoreReadTimeout"] = 120
+    json_data["source"]["protocol"]["botocoreConnectTimeout"] = 30
+    json_data["source"]["protocol"]["max_attempts"] = 2
+    assert validate_transfer_json(json_data)
+
     # Set it too low, and too high
     json_data["source"]["protocol"]["token_expiry_seconds"] = 899
     assert not validate_transfer_json(json_data)
@@ -245,6 +250,11 @@ def test_s3_destination(valid_transfer, valid_destination):
 
     # Add flags
     json_data["destination"][0]["flags"] = {"fullPath": "flag.txt"}
+    assert validate_transfer_json(json_data)
+
+    json_data["destination"][0]["protocol"]["botocoreReadTimeout"] = 120
+    json_data["destination"][0]["protocol"]["botocoreConnectTimeout"] = 30
+    json_data["destination"][0]["protocol"]["max_attempts"] = 2
     assert validate_transfer_json(json_data)
 
     # Remove protocol
