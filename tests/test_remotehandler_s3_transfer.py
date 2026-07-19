@@ -462,7 +462,7 @@ def setup_bucket(credentials, s3_client):
         subprocess.run(
             ["awslocal", "s3", "rb", f"s3://{bucket}", "--force"], check=False
         )
-        subprocess.run(["awslocal", "s3", "mb", f"s3://{bucket}"], check=False)
+        subprocess.run(["awslocal", "s3", "mb", f"s3://{bucket}"], check=True)
 
 
 def test_remote_handler():
