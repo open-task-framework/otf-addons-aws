@@ -96,6 +96,8 @@ def get_aws_client(  # pylint: disable=too-many-positional-arguments
     kwargs = {}
     if os.environ.get("AWS_ENDPOINT_URL"):
         kwargs["endpoint_url"] = os.environ.get("AWS_ENDPOINT_URL")
+    if credentials.get("region_name"):
+        kwargs["region_name"] = credentials["region_name"]
 
     if assume_role_arn:
         logger.info(f"Assuming role: {assume_role_arn}")

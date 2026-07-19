@@ -17,6 +17,7 @@ from opentaskpy.taskhandlers import transfer
 from pytest_shell import fs
 
 from opentaskpy import exceptions
+from opentaskpy.addons.aws.remotehandlers.creds import get_aws_client
 from opentaskpy.addons.aws.remotehandlers.s3 import S3Transfer
 from tests.fixtures.localstack import *
 
@@ -609,6 +610,66 @@ def test_s3_transfer_tidy_is_idempotent(monkeypatch):
 
     assert client.close_calls == 1
     assert handler.s3_client is None
+
+
+def test_get_aws_client_passes_region_to_sts(monkeypatch):
+    captured = {}
+
+    class DummySTSClient:
+        def assume_role(self, **kwargs):
+            captured["assume_role_kwargs"] = kwargs
+            return {
+                "Credentials": {
+                    "AccessKeyId": "assumed-key",
+                    "SecretAccessKey": "assumed-secret",
+                    "SessionToken": "assumed-token",
+                }
+            }
+
+    class DummySession:
+        def __init__(self, **kwargs):
+            captured["session_kwargs"] = kwargs
+
+        def client(self, client_type, **kwargs):
+            captured["session_client_type"] = client_type
+            captured["session_client_kwargs"] = kwargs
+            return object()
+
+    def fake_boto3_client(service_name, **kwargs):
+        captured["sts_service_name"] = service_name
+        captured["sts_client_kwargs"] = kwargs
+        return DummySTSClient()
+
+    monkeypatch.setenv("AWS_ENDPOINT_URL", "http://floci.test")
+    monkeypatch.setattr(
+        "opentaskpy.addons.aws.remotehandlers.creds.boto3.client",
+        fake_boto3_client,
+    )
+    monkeypatch.setattr(
+        "opentaskpy.addons.aws.remotehandlers.creds.boto3.session.Session",
+        DummySession,
+    )
+
+    result = get_aws_client(
+        "s3",
+        {
+            "AccessKeyId": "test-key",
+            "SecretAccessKey": "test-secret",
+            "region_name": "eu-west-1",
+        },
+        assume_role_arn="arn:aws:iam::012345678900:role/dummy-role",
+    )
+
+    assert captured["sts_service_name"] == "sts"
+    assert captured["sts_client_kwargs"]["endpoint_url"] == "http://floci.test"
+    assert captured["sts_client_kwargs"]["region_name"] == "eu-west-1"
+    assert captured["assume_role_kwargs"]["RoleArn"] == (
+        "arn:aws:iam::012345678900:role/dummy-role"
+    )
+    assert captured["session_kwargs"]["aws_access_key_id"] == "assumed-key"
+    assert captured["session_client_type"] == "s3"
+    assert captured["session_client_kwargs"]["endpoint_url"] == "http://floci.test"
+    assert result["temporary_creds"]["AccessKeyId"] == "assumed-key"
 
 
 def test_s3_file_watch(s3_client, setup_bucket, tmp_path):
