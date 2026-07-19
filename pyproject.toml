@@ -14,7 +14,7 @@ classifiers = [
 ]
 keywords = ["automation", "task", "framework", "aws", "s3", "ssm", "otf"]
 dependencies = [
-    "boto3 >= 1.26",
+    "boto3 >= 1.43",
     "jsonpath-ng >= 1.7.0",
     "opentaskpy >= v26.18.1",
 ]
@@ -373,8 +373,6 @@ ignore = [
     "D407", # Section name underlining
     "E501", # line too long
     "E731", # do not assign a lambda expression, use a def
-    # Ignored due to performance: https://github.com/charliermarsh/ruff/issues/2923
-    "UP038", # Use `X | Y` in `isinstance` call instead of `(X, Y)`
 ]
 
 

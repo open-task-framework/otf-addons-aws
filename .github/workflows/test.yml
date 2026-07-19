@@ -4,7 +4,7 @@ env:
   DEFAULT_PYTHON: "3.11"
   PRE_COMMIT_CACHE: ~/.cache/pre-commit
   KEY_PREFIX: base-venv
-  CACHE_VERSION: 1
+  CACHE_VERSION: 2
 # yamllint disable-line rule:truthy
 on:
   push:
