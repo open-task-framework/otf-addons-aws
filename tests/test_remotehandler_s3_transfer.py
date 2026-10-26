@@ -2,6 +2,7 @@
 # ruff: noqa
 # flake8: noqa
 import datetime
+import json
 import logging
 import os
 import re
@@ -9,6 +10,7 @@ import subprocess
 import threading
 from copy import deepcopy
 
+import boto3
 import botocore
 import freezegun
 import pytest
@@ -1143,10 +1145,62 @@ def test_local_to_s3_assume_role_real(tmp_path, credentials_aws_dev):
         assert key_ids[0] != key_ids[1]
 
 
-def test_s3_to_s3_assume_role(setup_bucket, tmp_path, s3_client):
-    transfer_obj = transfer.Transfer(
-        None, "s3-to-s3-assume_role", s3_to_s3_assume_role_task_definition
+@pytest.fixture
+def s3_transfer_role(floci, credentials):
+    iam_client = boto3.client("iam", endpoint_url=floci)
+    sts_client = boto3.client("sts", endpoint_url=floci)
+    account_id = sts_client.get_caller_identity()["Account"]
+    role_name = "otf-s3-transfer-test-role"
+    role = iam_client.create_role(
+        RoleName=role_name,
+        AssumeRolePolicyDocument=json.dumps(
+            {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Principal": {"AWS": f"arn:aws:iam::{account_id}:root"},
+                        "Action": "sts:AssumeRole",
+                    }
+                ],
+            }
+        ),
     )
+    try:
+        iam_client.put_role_policy(
+            RoleName=role_name,
+            PolicyName="test-bucket-access",
+            PolicyDocument=json.dumps(
+                {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Action": "s3:*",
+                            "Resource": [
+                                f"arn:aws:s3:::{bucket}{suffix}"
+                                for bucket in (BUCKET_NAME, BUCKET_NAME_2)
+                                for suffix in ("", "/*")
+                            ],
+                        }
+                    ],
+                }
+            ),
+        )
+        yield role["Role"]["Arn"]
+    finally:
+        iam_client.delete_role_policy(
+            RoleName=role_name, PolicyName="test-bucket-access"
+        )
+        iam_client.delete_role(RoleName=role_name)
+        iam_client.close()
+        sts_client.close()
+
+
+def test_s3_to_s3_assume_role(setup_bucket, tmp_path, s3_client, s3_transfer_role):
+    task_definition = deepcopy(s3_to_s3_assume_role_task_definition)
+    task_definition["source"]["protocol"]["assume_role_arn"] = s3_transfer_role
+    transfer_obj = transfer.Transfer(None, "s3-to-s3-assume_role", task_definition)
 
     # Create a file to watch for with the current date
     # Write a test file locally
@@ -1169,11 +1223,14 @@ def test_s3_to_s3_assume_role(setup_bucket, tmp_path, s3_client):
 
 
 def test_s3_to_s3_assume_role_with_assume_role_external_id(
-    setup_bucket, tmp_path, s3_client
+    setup_bucket, tmp_path, s3_client, s3_transfer_role
 ):
     s3_to_s3_assume_role_task_with_external_id_definition = deepcopy(
         s3_to_s3_assume_role_task_definition
     )
+    s3_to_s3_assume_role_task_with_external_id_definition["source"]["protocol"][
+        "assume_role_arn"
+    ] = s3_transfer_role
     s3_to_s3_assume_role_task_with_external_id_definition["source"]["protocol"][
         "assume_role_external_id"
     ] = "my-external-id"
