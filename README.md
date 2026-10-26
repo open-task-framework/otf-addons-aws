@@ -146,13 +146,13 @@ S3 transfers now apply botocore defaults even when not specified in the protocol
 
 - `botocoreReadTimeout`: `60`
 - `botocoreConnectTimeout`: `10`
-- `max_attempts`: `0`
+- `max_attempts`: `3` (up to three retries after the initial request)
 
 These are socket/connect and retry settings, not a total transfer deadline. A large
 upload or download that is still making progress can continue past the batch timeout
-request and still complete successfully. The defaults mainly prevent stalled S3 calls
-from sitting in botocore retries for longer than necessary. All three values can still
-be overridden per protocol when needed.
+request and still complete successfully. Transient failures use botocore's retry
+backoff, and each retry can incur another socket timeout. All three values can still
+be overridden per protocol when needed; set `max_attempts` to `0` to disable retries.
 
 ## Example S3 upload with flag files
 

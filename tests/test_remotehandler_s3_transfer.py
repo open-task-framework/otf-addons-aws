@@ -479,7 +479,8 @@ def test_remote_handler():
     assert transfer_obj.dest_remote_handlers is None
 
 
-def test_s3_transfer_passes_botocore_config(monkeypatch):
+@pytest.mark.parametrize("max_attempts", [0, 2])
+def test_s3_transfer_passes_botocore_config(monkeypatch, max_attempts):
     captured = {}
 
     class DummyClient:
@@ -516,7 +517,7 @@ def test_s3_transfer_passes_botocore_config(monkeypatch):
                 "name": "opentaskpy.addons.aws.remotehandlers.s3.S3Transfer",
                 "botocoreReadTimeout": 120,
                 "botocoreConnectTimeout": 30,
-                "max_attempts": 2,
+                "max_attempts": max_attempts,
             },
         }
     )
@@ -525,7 +526,7 @@ def test_s3_transfer_passes_botocore_config(monkeypatch):
     assert captured["client_type"] == "s3"
     assert captured["config"].read_timeout == 120
     assert captured["config"].connect_timeout == 30
-    assert captured["config"].retries["max_attempts"] == 2
+    assert captured["config"].retries["max_attempts"] == max_attempts
     handler.tidy()
 
 
@@ -566,7 +567,7 @@ def test_s3_transfer_uses_default_botocore_config(monkeypatch):
     assert isinstance(captured["config"], Config)
     assert captured["config"].read_timeout == 60
     assert captured["config"].connect_timeout == 10
-    assert captured["config"].retries["max_attempts"] == 0
+    assert captured["config"].retries["max_attempts"] == 3
     handler.tidy()
 
 
