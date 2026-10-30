@@ -1,8 +1,12 @@
 # Changelog
 
+# v26.43.0
+
+- Change `DEFAULT_S3_BOTOCORE_MAX_ATTEMPTS` from 0 to 3.
+
 # v26.28.0
 
-- Add support for specifying botore timeouts and retries for s3 transfers/executions
+- Add support for specifying botocore timeouts and retries for s3 transfers/executions
 - Fix issue in tidy throwing an exception when the s3 client was already closed
 
 # v26.18.0

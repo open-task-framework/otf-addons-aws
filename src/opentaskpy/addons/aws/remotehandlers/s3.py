@@ -20,14 +20,14 @@ from .creds import get_aws_client, set_aws_creds
 MAX_OBJECTS_PER_QUERY = 100
 DEFAULT_S3_BOTOCORE_READ_TIMEOUT = 60
 DEFAULT_S3_BOTOCORE_CONNECT_TIMEOUT = 10
-DEFAULT_S3_BOTOCORE_MAX_ATTEMPTS = 0
+DEFAULT_S3_BOTOCORE_MAX_ATTEMPTS = 3
 
 
 def _build_botocore_config(protocol: dict) -> Config:
     """Build a botocore client config from the task protocol settings.
 
-    Defaults are applied so S3 transfers do not inherit botocore retry behaviour that
-    can keep a batch blocked longer than expected after a timeout request.
+    Explicit defaults give S3 transfers bounded retries for transient failures
+    while allowing each task to override the retry and socket timeout settings.
     """
     config_options = {
         "read_timeout": protocol.get(
