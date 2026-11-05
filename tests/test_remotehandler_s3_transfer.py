@@ -9,6 +9,7 @@ import re
 import subprocess
 import threading
 from copy import deepcopy
+from unittest.mock import Mock
 
 import boto3
 import botocore
@@ -479,6 +480,57 @@ def test_remote_handler():
 
     # dest_remote_handler should be None
     assert transfer_obj.dest_remote_handlers is None
+
+
+@pytest.mark.parametrize("directory", [None, "", "dest/nested"])
+@pytest.mark.parametrize("direct", [False, True])
+@pytest.mark.parametrize("rename", [False, True])
+def test_s3_destination_object_key(monkeypatch, directory, direct, rename):
+    client = Mock()
+
+    def fake_get_aws_client(client_type, credentials, **kwargs):
+        return {"client": client, "temporary_creds": None}
+
+    monkeypatch.setattr(
+        "opentaskpy.addons.aws.remotehandlers.s3.get_aws_client", fake_get_aws_client
+    )
+    destination_spec = {
+        "task_id": "s3-destination-key-test",
+        "bucket": BUCKET_NAME_2,
+        "protocol": {
+            "name": "opentaskpy.addons.aws.remotehandlers.s3.S3Transfer",
+        },
+    }
+    if directory is not None:
+        destination_spec["directory"] = directory
+    if rename:
+        destination_spec["rename"] = {"pattern": r"\.txt$", "sub": ".csv"}
+
+    destination = S3Transfer(destination_spec)
+    file_name = "example.csv" if rename else "example.txt"
+    expected_key = f"{directory}/{file_name}" if directory else file_name
+
+    if direct:
+        source_spec = deepcopy(destination_spec)
+        source_spec["bucket"] = BUCKET_NAME
+        source = S3Transfer(source_spec)
+        assert source.transfer_files(["src/example.txt"], {}, destination) == 0
+        client.copy.assert_called_once_with(
+            {"Bucket": BUCKET_NAME, "Key": "src/example.txt"},
+            BUCKET_NAME_2,
+            expected_key,
+        )
+        source.tidy()
+    else:
+        local_file = "/staging/example.txt"
+        assert destination.push_files_from_worker("/staging", {local_file: {}}) == 0
+        client.upload_file.assert_called_once_with(
+            local_file,
+            BUCKET_NAME_2,
+            expected_key,
+            ExtraArgs={"ACL": "bucket-owner-full-control"},
+        )
+    destination.tidy()
 
 
 @pytest.mark.parametrize("max_attempts", [0, 2])

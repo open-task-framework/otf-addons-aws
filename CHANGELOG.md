@@ -1,5 +1,9 @@
 # Changelog
 
+# v26.44.0
+
+- Prevent double `/` in S3 prefix when destination directory is not specified.
+
 # v26.43.0
 
 - Change `DEFAULT_S3_BOTOCORE_MAX_ATTEMPTS` from 0 to 3.
