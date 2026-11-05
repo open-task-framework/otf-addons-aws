@@ -374,15 +374,19 @@ class S3Transfer(RemoteTransferHandler):
 
                 file_name = re.sub(rename_regex, rename_sub, file_name)
                 self.logger.info(f"Renaming file to {file_name}")
+            object_key = file_name
+            directory = self.spec.get("directory", "")
+            if directory:
+                object_key = f"{directory}/{file_name}"
             self.logger.info(
                 f"Transferring file: {file} to"
-                f" s3://{self.spec['bucket']}/{self.spec['directory']}/{file_name}"
+                f" s3://{self.spec['bucket']}/{object_key}"
             )
             try:
                 self.s3_client.upload_file(
                     file,
                     self.spec["bucket"],
-                    f"{self.spec['directory']}/{file_name}",
+                    object_key,
                     ExtraArgs=kwargs,
                 )
             except Exception as e:  # pylint: disable=broad-exception-caught
@@ -463,9 +467,13 @@ class S3Transfer(RemoteTransferHandler):
 
                 file_name = re.sub(rename_regex, rename_sub, file_name)
                 self.logger.info(f"Renaming file to {file_name}")
+            object_key = file_name
+            directory = dest_remote_handler.spec.get("directory", "")
+            if directory:
+                object_key = f"{directory}/{file_name}"
             self.logger.info(
                 f"Transferring file: {file} from {self.spec['bucket']} to"
-                f" {dest_remote_handler.spec['bucket']}/{file_name}"
+                f" s3://{dest_remote_handler.spec['bucket']}/{object_key}"
             )
             try:
                 self.s3_client.copy(
@@ -474,7 +482,7 @@ class S3Transfer(RemoteTransferHandler):
                         "Key": file,
                     },
                     dest_remote_handler.spec["bucket"],
-                    f"{dest_remote_handler.spec['directory']}/{file_name}",
+                    object_key,
                 )
             except Exception as e:  # pylint: disable=broad-exception-caught
                 self.logger.error(f"Error transferring file: {file}")
